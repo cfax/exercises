@@ -56,7 +56,7 @@ is 25.
 -}
 -- DON'T FORGET TO SPECIFY THE TYPE IN HERE
 sumOfSquares :: Integer -> Integer -> Integer
-sumOfSquares x y = x ^ (2 :: Int) + y ^ (2 :: Int)
+sumOfSquares x y = x * x + y * y
 
 {- | Implement a function that returns the last digit of a given number.
 
@@ -70,7 +70,7 @@ sumOfSquares x y = x ^ (2 :: Int) + y ^ (2 :: Int)
 -}
 -- DON'T FORGET TO SPECIFY THE TYPE IN HERE
 lastDigit :: Integer -> Integer
-lastDigit n = mod (abs n) 10
+lastDigit n = abs n `mod` 10
 
 {- | Write a function that takes three numbers and returns the
 difference between the biggest number and the smallest one.
@@ -85,9 +85,8 @@ Try to use local variables (either let-in or where) to implement this
 function.
 -}
 minmax :: Integer -> Integer -> Integer -> Integer
-minmax x y z = difference
-    where difference = biggest - smallest
-          biggest = max (max x y) z
+minmax x y z = biggest - smallest
+    where biggest = max (max x y) z
           smallest = min (min x y) z
 
 {- | Implement a function that takes a string, start and end positions
@@ -106,14 +105,12 @@ first character) and negative end position should result in an empty
 string.
 -}
 subString :: Int -> Int -> String -> String
-subString start end str = take numOfCharsToKeep $ drop start str
-    where numOfCharsToKeep = end' - start' + 1
-          start' = if (start < 0)
-                      then 0
-                      else start
-          end' = if (end < 0 || end < start)
-                    then start - 1
-                    else end
+subString start end str
+    | end < 0     = ""
+    | end < start = ""
+    | otherwise   = take numOfCharsToKeep $ drop start str
+    where numOfCharsToKeep = end - start' + 1
+          start' = max 0 start
 
 {- | Write a function that takes a String — space separated numbers,
 and finds a sum of the numbers inside this string.
@@ -124,10 +121,7 @@ and finds a sum of the numbers inside this string.
 The string contains only spaces and/or numbers.
 -}
 strSum :: String -> Integer
-strSum str = sum ints
-    where ints = map toInt strings
-          toInt s = read s :: Integer
-          strings = words str
+strSum str = sum $ map read $ words str
 
 {- | Write a function that takes a number and a list of numbers and
 returns a string, saying how many elements of the list are strictly
@@ -143,14 +137,16 @@ and lower than 6 elements (4, 5, 6, 7, 8 and 9).
 🕯 HINT: Use recursion to implement this function.
 -}
 lowerAndGreater :: Integer -> [Integer] -> String
-lowerAndGreater n list = go n (0 :: Integer) (0 :: Integer) list
-    where go n' lower greater [] = show n' ++ " is greater than " ++ show greater ++ " elements and lower than " ++ show lower ++ " elements"
-          go n' lower greater (x:rest) = let newLowerCount = lower + (lowerCount n' x)
-                                             newGreaterCount = (greater + (greaterCount n' x))
-                                          in go n' newLowerCount newGreaterCount $ rest
-          lowerCount n'' x = if (n'' < x)
-                               then 1
-                               else 0
-          greaterCount n'' x = if (n'' > x)
-                                 then 1
-                                 else 0
+lowerAndGreater n = go n 0 0
+    where go :: Integer -> Integer -> Integer -> [Integer] -> String
+          go n' lower greater [] = unwords
+              [ show n',
+               "is greater than",
+               show greater,
+               "elements and lower than",
+               show lower,
+               "elements" ]
+          go n' lower greater (x:rest) 
+            | n' < x = go n' (lower + 1) greater rest
+            | n' > x = go n' lower (greater + 1) rest
+            | otherwise = go n' lower greater rest
