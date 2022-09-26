@@ -41,7 +41,8 @@ module Lecture2
     ) where
 
 -- VVV If you need to import libraries, do it after this line ... VVV
-
+import Data.Char (isSpace)
+import Data.Either (isLeft, isRight)
 -- ^^^ and before this line. Otherwise the test suite might fail  ^^^
 
 {- | Implement a function that finds a product of all the numbers in
@@ -52,7 +53,10 @@ zero, you can stop calculating product and return 0 immediately.
 84
 -}
 lazyProduct :: [Int] -> Int
-lazyProduct = error "TODO"
+lazyProduct [] = 1
+lazyProduct (0:_) = 0
+lazyProduct (x:[]) = x
+lazyProduct (x:xs) = x * lazyProduct xs
 
 {- | Implement a function that duplicates every element in the list.
 
@@ -62,7 +66,8 @@ lazyProduct = error "TODO"
 "ccaabb"
 -}
 duplicate :: [a] -> [a]
-duplicate = error "TODO"
+duplicate [] = []
+duplicate (x:xs) = [x, x] ++ duplicate xs
 
 {- | Implement function that takes index and a list and removes the
 element at the given position. Additionally, this function should also
@@ -74,7 +79,14 @@ return the removed element.
 >>> removeAt 10 [1 .. 5]
 (Nothing,[1,2,3,4,5])
 -}
-removeAt = error "TODO"
+removeAt :: Int -> [a] -> (Maybe a, [a])
+removeAt index xs
+  | index < 0          = (Nothing, xs)
+  | index >= numElems  = (Nothing, xs)
+  | otherwise          = (Just (xs !! index), xs')
+      where xs' = first ++ tail second
+            (first, second) = splitAt index xs
+            numElems = length $ take (index + 1) xs
 
 {- | Write a function that takes a list of lists and returns only
 lists of even lengths.
@@ -85,7 +97,13 @@ lists of even lengths.
 ♫ NOTE: Use eta-reduction and function composition (the dot (.) operator)
   in this function.
 -}
-evenLists = error "TODO"
+evenLists :: [[a]] -> [[a]]
+evenLists [] = []
+evenLists (x:xs)
+    | hasEvenLength x = x : evenLists xs
+    | otherwise = evenLists xs
+  where
+      hasEvenLength = even . length
 
 {- | The @dropSpaces@ function takes a string containing a single word
 or number surrounded by spaces and removes all leading and trailing
@@ -101,7 +119,9 @@ spaces.
 
 🕯 HINT: look into Data.Char and Prelude modules for functions you may use.
 -}
-dropSpaces = error "TODO"
+dropSpaces :: String -> String
+dropSpaces = takeWhile isNotSpace . dropWhile isSpace
+    where isNotSpace = not . isSpace
 
 {- |
 
@@ -158,16 +178,85 @@ You're free to define any helper functions.
 -}
 
 -- some help in the beginning ;)
-data Knight = Knight
-    { knightHealth    :: Int
-    , knightAttack    :: Int
-    , knightEndurance :: Int
+data Chest = Chest
+    { chestGold     :: Int
+    , chestTreasure :: Int
     }
+    deriving (Show)
 
-dragonFight = error "TODO"
+add :: Chest -> Chest -> Chest
+add c1 c2 = Chest (chestGold c1 + chestGold c2)
+                  (chestTreasure c1 + chestTreasure c2)
+
+data Knight = Knight
+    { knightHealth     :: Int
+    , knightAttack     :: Int
+    , knightEndurance  :: Int
+    , knightExperience :: Int
+    , knightChest      :: Chest
+    }
+    deriving (Show)
+
+data Colour
+    = Red
+    | Black
+    | Green
+    deriving (Show, Eq)
+
+data Dragon = Dragon
+    { dragonColour    :: Colour
+    , dragonChest     :: Chest
+    , dragonHealth    :: Int
+    , dragonAttack    :: Int
+    , dragonEndurance :: Int
+    }
+    deriving (Show)
+
+dragonExperience :: Dragon -> Int
+dragonExperience dragon =
+    case (dragonColour dragon) of
+        Red   -> 100
+        Black -> 150
+        Green -> 250
+
+data FightOutcome
+    = KnightWins
+    | KnightDies
+    | KnightRunsAway
+    deriving (Show)
+
+dragonFight :: Knight -> Dragon -> FightOutcome
+dragonFight knight dragon = go 1 knight dragon
+    where go strike knight' dragon'
+            | knightEndurance knight' <= 0 = KnightRunsAway
+            | dragonHealth dragon' <= 0    = KnightWins
+            | knightHealth knight' <= 0    = KnightDies
+            | otherwise                    = go (strike + 1) knight'' dragon''
+              where (knight'', dragon'') = fightRound strike knight' dragon'
+
+fightRound :: Int -> Knight -> Dragon -> (Knight, Dragon)
+fightRound strike k d = (knight', dragon')
+    where knight'
+            | isMultipleOf10 strike = k { knightHealth    = knightHealth k - dragonAttack d
+                                        , knightEndurance = knightEndurance k - 1}
+            | otherwise             = k { knightEndurance = knightEndurance k - 1}
+          dragon'                   = d { dragonHealth = dragonHealth d - knightAttack k}
+          isMultipleOf10 s = s `mod` 10 == 0
+
+updateFighters :: Knight -> Dragon -> FightOutcome -> (Maybe Knight, Maybe Dragon)
+updateFighters k d outcome =
+    case outcome of
+      KnightDies     -> (Nothing, Just d)
+      KnightRunsAway -> (Just k, Just d)
+      KnightWins     -> (Just k', Nothing)
+         where k' = k { knightExperience = knightExperience k + dragonExperience d
+                      , knightChest = add (knightChest k) (dragonChest')}
+               dragonChest' = case (dragonColour d) of
+                   Green -> (dragonChest d) { chestTreasure = 0 }
+                   _ -> dragonChest d
 
 ----------------------------------------------------------------------------
--- Extra Challenges
+    -- Extra Challenges
 ----------------------------------------------------------------------------
 
 {- The following exercises are considered optional. Some of them might be more
@@ -185,7 +274,9 @@ False
 True
 -}
 isIncreasing :: [Int] -> Bool
-isIncreasing = error "TODO"
+isIncreasing [] = True
+isIncreasing [_] = True
+isIncreasing xs = and $ zipWith (\x y -> y > x) xs (tail xs)
 
 {- | Implement a function that takes two lists, sorted in the
 increasing order, and merges them into new list, also sorted in the
@@ -198,7 +289,11 @@ verify that.
 [1,2,3,4,7]
 -}
 merge :: [Int] -> [Int] -> [Int]
-merge = error "TODO"
+merge xs [] = xs
+merge [] ys = ys
+merge allXs@(x:xs) allYs@(y:ys) = case (x < y) of
+                                    True -> x : merge xs allYs
+                                    False -> y : merge allXs ys
 
 {- | Implement the "Merge Sort" algorithm in Haskell. The @mergeSort@
 function takes a list of numbers and returns a new list containing the
@@ -215,8 +310,11 @@ The algorithm of merge sort is the following:
 [1,2,3]
 -}
 mergeSort :: [Int] -> [Int]
-mergeSort = error "TODO"
-
+mergeSort [] = []
+mergeSort [x] = [x]
+mergeSort xs = merge (mergeSort first) (mergeSort second)
+    where (first, second) = split xs
+          split xs' = splitAt (length xs' `div` 2) xs'
 
 {- | Haskell is famous for being a superb language for implementing
 compilers and interpeters to other programming languages. In the next
@@ -268,7 +366,21 @@ data EvalError
 It returns either a successful evaluation result or an error.
 -}
 eval :: Variables -> Expr -> Either EvalError Int
-eval = error "TODO"
+eval         _ (Lit lit) = Right lit
+eval variables (Var var) = case (lookup var variables) of
+                             Just int -> Right int
+                             Nothing  -> Left (VariableNotFound var)
+eval variables (Add expr1 expr2)
+  | isRight result1 && isRight result2 = Right $ (fromRight' result1 + fromRight' result2)
+  | isLeft result1                     = result1
+  | isLeft result2                     = result2
+  | otherwise                          = error "Computational error"
+    where result1 = eval variables expr1
+          result2 = eval variables expr2
+
+fromRight' :: Either a b -> b
+fromRight' (Left _) = error "Computational error"
+fromRight' (Right b) = b
 
 {- | Compilers also perform optimizations! One of the most common
 optimizations is "Constant Folding". It performs arithmetic operations
@@ -292,4 +404,45 @@ Write a function that takes and expression and performs "Constant
 Folding" optimization on the given expression.
 -}
 constantFolding :: Expr -> Expr
-constantFolding = error "TODO"
+constantFolding (Lit lit) = Lit lit
+constantFolding (Var var) = Var var
+constantFolding (Add expr1 expr2) =
+    case expr1 of
+      Lit lit1 ->
+          case expr2 of
+            Lit lit2          -> Lit (lit1 + lit2)          -- int reduction
+            Var var2          -> Add (Lit lit1) (Var var2)  -- no op
+            Add expr2a expr2b ->
+                case expr2a of
+                  Lit lit2a           -> constantFolding $ Add (Lit (lit1 + lit2a)) expr2b
+                  Var var2a           -> Add (Var var2a) (constantFolding $ Add (Lit lit1) expr2b)
+                  Add expr2a1 expr2a2 ->
+                      Add (constantFolding $ Add (Lit lit1) expr2a1)
+                          (constantFolding $ (Add expr2a2 expr2b)) -- this is getting out of hand :D
+      Var var1 ->
+          case expr2 of
+            Lit 0             -> Var var1                    -- special case
+            Lit lit2          -> Add (Var var1) (Lit lit2)   -- no op
+            Var var2          -> Add (Var var1) (Var var2)   -- no op
+            Add expr2a expr2b -> Add (Var var1) (constantFolding (Add expr2a expr2b))
+      Add expr1a expr1b ->
+          case expr1a of
+            Var var1a           -> Add (Var var1a) (constantFolding $ expr1b)
+            Lit lit1a           ->
+                case expr1b of
+                  Lit lit1b           -> Lit (lit1a + lit1b)          -- int reduction
+                  Var var1b           -> Add (Lit lit1a) (Var var1b)  -- no op
+                  Add expr2b1 expr2b2 ->
+                      Add (constantFolding $ Add (Lit lit1a) expr2b1)
+                          (constantFolding $ expr2b2)
+            Add expr1a1 expr1a2 ->                                    -- change associativity
+                case expr1b of
+                  Lit lit1b           -> constantFolding $ Add (Lit lit1b) expr1a
+                  Var var1b           -> Add (Var var1b) (constantFolding $ expr1a)
+                  Add expr2b1 expr2b2 ->  -- not sure what I'm doing at this point
+                      constantFolding $
+                          Add expr1a1
+                              (constantFolding $
+                                  Add expr1a2
+                                  (constantFolding $
+                                      Add expr2b1 expr2b2))
