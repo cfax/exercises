@@ -67,7 +67,7 @@ lazyProduct (x:xs) = x * lazyProduct xs
 -}
 duplicate :: [a] -> [a]
 duplicate [] = []
-duplicate (x:xs) = [x, x] ++ duplicate xs
+duplicate (x:xs) = x : x : duplicate xs
 
 {- | Implement function that takes index and a list and removes the
 element at the given position. Additionally, this function should also
@@ -79,14 +79,25 @@ return the removed element.
 >>> removeAt 10 [1 .. 5]
 (Nothing,[1,2,3,4,5])
 -}
+
+-- Original implementation:
+--removeAt :: Int -> [a] -> (Maybe a, [a])
+--removeAt index xs
+--  | index < 0          = (Nothing, xs)
+--  | index >= numElems  = (Nothing, xs)
+--  | otherwise          = (Just (xs !! index), xs')
+--      where xs' = first ++ tail second
+--            (first, second) = splitAt index xs
+--            numElems = length $ take (index + 1) xs
+
 removeAt :: Int -> [a] -> (Maybe a, [a])
-removeAt index xs
-  | index < 0          = (Nothing, xs)
-  | index >= numElems  = (Nothing, xs)
-  | otherwise          = (Just (xs !! index), xs')
-      where xs' = first ++ tail second
-            (first, second) = splitAt index xs
-            numElems = length $ take (index + 1) xs
+removeAt 0 (x:xs) = (Just x, xs)
+removeAt index xs =
+    let (first, second) = splitAt index xs
+     in case (first, second) of
+          ([], _)               -> (Nothing, xs)
+          (_, [])               -> (Nothing, xs)
+          (first', (y:second')) -> (Just y, first' ++ second')
 
 {- | Write a function that takes a list of lists and returns only
 lists of even lengths.
@@ -98,12 +109,7 @@ lists of even lengths.
   in this function.
 -}
 evenLists :: [[a]] -> [[a]]
-evenLists [] = []
-evenLists (x:xs)
-    | hasEvenLength x = x : evenLists xs
-    | otherwise = evenLists xs
-  where
-      hasEvenLength = even . length
+evenLists = filter (even . length)
 
 {- | The @dropSpaces@ function takes a string containing a single word
 or number surrounded by spaces and removes all leading and trailing
@@ -178,46 +184,54 @@ You're free to define any helper functions.
 -}
 
 -- some help in the beginning ;)
-data Chest = Chest
-    { chestGold     :: Int
-    , chestTreasure :: Int
-    }
-    deriving (Show)
+-- data Chest a = Chest
+--     { chestGold     :: Int
+--     , chestTreasure :: a
+--     }
+--     deriving (Show)
 
-add :: Chest -> Chest -> Chest
-add c1 c2 = Chest (chestGold c1 + chestGold c2)
-                  (chestTreasure c1 + chestTreasure c2)
+-- add :: Chest -> Chest -> Chest
+-- add c1 c2 = Chest (chestGold c1 + chestGold c2)
+--                   (chestTreasure c1 <> chestTreasure c2)
+
+-- | GoldAndTreasureChest Bool
 
 data Knight = Knight
     { knightHealth     :: Int
     , knightAttack     :: Int
     , knightEndurance  :: Int
     , knightExperience :: Int
-    , knightChest      :: Chest
     }
     deriving (Show)
 
-data Colour
-    = Red
-    | Black
-    | Green
-    deriving (Show, Eq)
+type Gold = Int
+data Treasure = Treasure
+    deriving (Show)
 
-data Dragon = Dragon
-    { dragonColour    :: Colour
-    , dragonChest     :: Chest
-    , dragonHealth    :: Int
+data DragonTraits = DragonTraits
+    { dragonHealth    :: Int
     , dragonAttack    :: Int
     , dragonEndurance :: Int
     }
     deriving (Show)
 
+data Dragon
+    = GreenDragon DragonTraits Gold
+    | RedDragon DragonTraits Gold Treasure
+    | BlackDragon DragonTraits Gold Treasure
+    deriving (Show)
+
+getDragonTraits :: Dragon -> DragonTraits
+getDragonTraits (GreenDragon traits _)   = traits
+getDragonTraits (RedDragon   traits _ _) = traits
+getDragonTraits (BlackDragon traits _ _) = traits
+
 dragonExperience :: Dragon -> Int
 dragonExperience dragon =
-    case (dragonColour dragon) of
-        Red   -> 100
-        Black -> 150
-        Green -> 250
+    case (dragon) of
+        RedDragon _ _ _   -> 100
+        BlackDragon _ _ _ -> 150
+        GreenDragon _ _   -> 250
 
 data FightOutcome
     = KnightWins
@@ -226,7 +240,7 @@ data FightOutcome
     deriving (Show)
 
 dragonFight :: Knight -> Dragon -> FightOutcome
-dragonFight knight dragon = go 1 knight dragon
+dragonFight knight dragon = go 1 knight (getDragonTraits dragon)
     where go strike knight' dragon'
             | knightEndurance knight' <= 0 = KnightRunsAway
             | dragonHealth dragon' <= 0    = KnightWins
@@ -234,26 +248,14 @@ dragonFight knight dragon = go 1 knight dragon
             | otherwise                    = go (strike + 1) knight'' dragon''
               where (knight'', dragon'') = fightRound strike knight' dragon'
 
-fightRound :: Int -> Knight -> Dragon -> (Knight, Dragon)
+fightRound :: Int -> Knight -> DragonTraits -> (Knight, DragonTraits)
 fightRound strike k d = (knight', dragon')
     where knight'
             | isMultipleOf10 strike = k { knightHealth    = knightHealth k - dragonAttack d
                                         , knightEndurance = knightEndurance k - 1}
             | otherwise             = k { knightEndurance = knightEndurance k - 1}
-          dragon'                   = d { dragonHealth = dragonHealth d - knightAttack k}
+          dragon'                   = d { dragonHealth = dragonHealth d - knightAttack k }
           isMultipleOf10 s = s `mod` 10 == 0
-
-updateFighters :: Knight -> Dragon -> FightOutcome -> (Maybe Knight, Maybe Dragon)
-updateFighters k d outcome =
-    case outcome of
-      KnightDies     -> (Nothing, Just d)
-      KnightRunsAway -> (Just k, Just d)
-      KnightWins     -> (Just k', Nothing)
-         where k' = k { knightExperience = knightExperience k + dragonExperience d
-                      , knightChest = add (knightChest k) (dragonChest')}
-               dragonChest' = case (dragonColour d) of
-                   Green -> (dragonChest d) { chestTreasure = 0 }
-                   _ -> dragonChest d
 
 ----------------------------------------------------------------------------
     -- Extra Challenges
@@ -276,7 +278,10 @@ True
 isIncreasing :: [Int] -> Bool
 isIncreasing [] = True
 isIncreasing [_] = True
-isIncreasing xs = and $ zipWith (\x y -> y > x) xs (tail xs)
+isIncreasing (x:y:ys) = x < y && isIncreasing (y:ys)
+
+-- Previous attempt:
+--isIncreasing xs = and $ zipWith (\x y -> y > x) xs (tail xs)
 
 {- | Implement a function that takes two lists, sorted in the
 increasing order, and merges them into new list, also sorted in the
@@ -291,9 +296,10 @@ verify that.
 merge :: [Int] -> [Int] -> [Int]
 merge xs [] = xs
 merge [] ys = ys
-merge allXs@(x:xs) allYs@(y:ys) = case (x < y) of
-                                    True -> x : merge xs allYs
-                                    False -> y : merge allXs ys
+merge allXs@(x:xs) allYs@(y:ys)
+  | x < y     = x : merge xs allYs
+  | x > y     = y : merge allXs ys
+  | otherwise = x : y : merge xs ys
 
 {- | Implement the "Merge Sort" algorithm in Haskell. The @mergeSort@
 function takes a list of numbers and returns a new list containing the
@@ -313,8 +319,17 @@ mergeSort :: [Int] -> [Int]
 mergeSort [] = []
 mergeSort [x] = [x]
 mergeSort xs = merge (mergeSort first) (mergeSort second)
-    where (first, second) = split xs
-          split xs' = splitAt (length xs' `div` 2) xs'
+    where (first, second) = separate xs
+
+-- Original implementation:
+--     where (first, second) = split xs
+--          split xs' = splitAt (length xs' `div` 2) xs'
+
+separate :: [Int] -> ([Int], [Int])
+separate xs = go ([], []) xs
+    where go (first, second) [] = (reverse first, reverse second)
+          go (first, second) (x:[]) = (reverse $ x:first, reverse $ second)
+          go (first, second) (x:y:xs') = go (x:first, y:second) xs'
 
 {- | Haskell is famous for being a superb language for implementing
 compilers and interpeters to other programming languages. In the next
@@ -366,21 +381,29 @@ data EvalError
 It returns either a successful evaluation result or an error.
 -}
 eval :: Variables -> Expr -> Either EvalError Int
-eval         _ (Lit lit) = Right lit
-eval variables (Var var) = case (lookup var variables) of
-                             Just int -> Right int
-                             Nothing  -> Left (VariableNotFound var)
-eval variables (Add expr1 expr2)
-  | isRight result1 && isRight result2 = Right $ (fromRight' result1 + fromRight' result2)
-  | isLeft result1                     = result1
-  | isLeft result2                     = result2
-  | otherwise                          = error "Computational error"
-    where result1 = eval variables expr1
-          result2 = eval variables expr2
+eval         _ (Lit lit)         = Right lit
+eval variables (Var var)         = case (lookup var variables) of
+                                     Just int -> Right int
+                                     Nothing  -> Left (VariableNotFound var)
+eval variables (Add expr1 expr2) = append (eval variables expr1) (eval variables expr2)
+  where
+    append :: Either EvalError Int -> Either EvalError Int -> Either EvalError Int
+    append (Left e) _          = Left e
+    append _ (Left e)          = Left e
+    append (Right x) (Right y) = Right (x + y)
 
-fromRight' :: Either a b -> b
-fromRight' (Left _) = error "Computational error"
-fromRight' (Right b) = b
+-- Original implementation:
+--eval variables (Add expr1 expr2)
+--  | isRight result1 && isRight result2 = Right $ (fromRight' result1 + fromRight' result2)
+--  | isLeft result1                     = result1
+--  | isLeft result2                     = result2
+--  | otherwise                          = error "Computational error"
+--    where result1 = eval variables expr1
+--          result2 = eval variables expr2
+--
+--fromRight' :: Either a b -> b
+--fromRight' (Left _) = error "Computational error"
+--fromRight' (Right b) = b
 
 {- | Compilers also perform optimizations! One of the most common
 optimizations is "Constant Folding". It performs arithmetic operations
@@ -404,45 +427,12 @@ Write a function that takes and expression and performs "Constant
 Folding" optimization on the given expression.
 -}
 constantFolding :: Expr -> Expr
-constantFolding (Lit lit) = Lit lit
-constantFolding (Var var) = Var var
-constantFolding (Add expr1 expr2) =
-    case expr1 of
-      Lit lit1 ->
-          case expr2 of
-            Lit lit2          -> Lit (lit1 + lit2)          -- int reduction
-            Var var2          -> Add (Lit lit1) (Var var2)  -- no op
-            Add expr2a expr2b ->
-                case expr2a of
-                  Lit lit2a           -> constantFolding $ Add (Lit (lit1 + lit2a)) expr2b
-                  Var var2a           -> Add (Var var2a) (constantFolding $ Add (Lit lit1) expr2b)
-                  Add expr2a1 expr2a2 ->
-                      Add (constantFolding $ Add (Lit lit1) expr2a1)
-                          (constantFolding $ (Add expr2a2 expr2b)) -- this is getting out of hand :D
-      Var var1 ->
-          case expr2 of
-            Lit 0             -> Var var1                    -- special case
-            Lit lit2          -> Add (Var var1) (Lit lit2)   -- no op
-            Var var2          -> Add (Var var1) (Var var2)   -- no op
-            Add expr2a expr2b -> Add (Var var1) (constantFolding (Add expr2a expr2b))
-      Add expr1a expr1b ->
-          case expr1a of
-            Var var1a           -> Add (Var var1a) (constantFolding $ expr1b)
-            Lit lit1a           ->
-                case expr1b of
-                  Lit lit1b           -> Lit (lit1a + lit1b)          -- int reduction
-                  Var var1b           -> Add (Lit lit1a) (Var var1b)  -- no op
-                  Add expr2b1 expr2b2 ->
-                      Add (constantFolding $ Add (Lit lit1a) expr2b1)
-                          (constantFolding $ expr2b2)
-            Add expr1a1 expr1a2 ->                                    -- change associativity
-                case expr1b of
-                  Lit lit1b           -> constantFolding $ Add (Lit lit1b) expr1a
-                  Var var1b           -> Add (Var var1b) (constantFolding $ expr1a)
-                  Add expr2b1 expr2b2 ->  -- not sure what I'm doing at this point
-                      constantFolding $
-                          Add expr1a1
-                              (constantFolding $
-                                  Add expr1a2
-                                  (constantFolding $
-                                      Add expr2b1 expr2b2))
+constantFolding (Add e (Lit 0)) = e
+constantFolding (Add (Lit 0) e) = e
+constantFolding (Add e1 e2) =
+    case (e1, e2) of
+      (Lit lit1, Lit lit2)           -> Lit (lit1 + lit2)
+      (Add (Var var) e1', e2')       -> Add (Var var) (constantFolding $ Add e1' e2')
+      (Add e1' (Var var), e2')       -> Add (Var var) (constantFolding $ Add e1' e2')
+      (e1', e2')                     -> Add e1' e2'
+constantFolding e = e
