@@ -326,10 +326,18 @@ mergeSort xs = merge (mergeSort first) (mergeSort second)
 --          split xs' = splitAt (length xs' `div` 2) xs'
 
 separate :: [Int] -> ([Int], [Int])
-separate xs = go ([], []) xs
-    where go (first, second) [] = (reverse first, reverse second)
-          go (first, second) (x:[]) = (reverse $ x:first, reverse $ second)
-          go (first, second) (x:y:xs') = go (x:first, y:second) xs'
+separate [] = ([], [])
+separate [x] = ([x], [])
+separate (x : y : zs) =
+    let (xs, ys) = separate zs
+    in (x : xs, y : ys)
+
+-- Original implementation:
+-- separate :: [Int] -> ([Int], [Int])
+-- separate xs = go ([], []) xs
+--     where go (first, second) [] = (reverse first, reverse second)
+--           go (first, second) (x:[]) = (reverse $ x:first, reverse $ second)
+--           go (first, second) (x:y:xs') = go (x:first, y:second) xs'
 
 {- | Haskell is famous for being a superb language for implementing
 compilers and interpeters to other programming languages. In the next
@@ -431,8 +439,8 @@ constantFolding (Add e (Lit 0)) = e
 constantFolding (Add (Lit 0) e) = e
 constantFolding (Add e1 e2) =
     case (e1, e2) of
-      (Lit lit1, Lit lit2)           -> Lit (lit1 + lit2)
-      (Add (Var var) e1', e2')       -> Add (Var var) (constantFolding $ Add e1' e2')
-      (Add e1' (Var var), e2')       -> Add (Var var) (constantFolding $ Add e1' e2')
-      (e1', e2')                     -> Add e1' e2'
+      (Lit lit1, Lit lit2)     -> Lit (lit1 + lit2)
+      (Add (Var var) e1', e2') -> constantFolding $ Add (Var var) (constantFolding $ Add e1' e2')
+      (Add e1' (Var var), e2') -> constantFolding $ Add (Var var) (constantFolding $ Add e1' e2')
+      (e1', e2')               -> Add e1' e2'
 constantFolding e = e
