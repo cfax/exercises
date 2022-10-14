@@ -144,7 +144,9 @@ instance Semigroup Reward where
 
 instance Monoid Reward where
     mempty :: Reward
-    mempty = Reward (Gold 0) False
+    mempty = Reward mempty False
+-- Original implementation
+--    mempty = Reward (Gold 0) False
 
 
 {- | 'List1' is a list that contains at least one element.
@@ -182,17 +184,23 @@ monsters, you should get a combined treasure and not just the first
 🕯 HINT: You may need to add additional constraints to this instance
   declaration.
 -}
-instance (Semigroup a) => Semigroup (Treasure a) where
+instance (Eq a, Semigroup a) => Semigroup (Treasure a) where
     (<>) :: Treasure a -> Treasure a -> Treasure a
-    t1 <> t2 =
-        case (t1, t2) of
-          (NoTreasure, SomeTreasure t)     -> SomeTreasure t
-          (SomeTreasure t, NoTreasure)     -> SomeTreasure t
-          (SomeTreasure t, SomeTreasure u) -> SomeTreasure (t <> u)
-          _                                -> NoTreasure
+    t1 <> t2
+      | t1 == NoTreasure = t2
+      | t2 == NoTreasure = t1
+      | otherwise        = SomeTreasure (t <> u)
+          where SomeTreasure t = t1
+                SomeTreasure u = t2
+
+-- Original implementation
+--          (NoTreasure, SomeTreasure t)     -> SomeTreasure t
+--          (SomeTreasure t, NoTreasure)     -> SomeTreasure t
+--          (SomeTreasure t, SomeTreasure u) -> SomeTreasure (t <> u)
+--          _                                -> NoTreasure
 
 
-instance (Semigroup a) => Monoid (Treasure a) where
+instance (Eq a, Semigroup a) => Monoid (Treasure a) where
     mempty :: Treasure a
     mempty = NoTreasure
 
@@ -213,14 +221,25 @@ together only different elements.
 Product {getProduct = 6}
 
 -}
-appendDiff3 :: (Monoid a, Eq a) => a -> a -> a -> a
-appendDiff3 x y z = x <> y' <> z'
-    where y' = if (y /= x)
-                  then y
-                  else mempty
-          z' = if (z /= x) && (z /= y)
-                  then z
-                  else mempty
+
+appendDiff3 :: (Semigroup a, Eq a) => a -> a -> a -> a
+appendDiff3 x y z
+  | x == y && x == z           = x
+  | x == y && x /= z           = x <> z
+  | x /= y && x == z           = x <> y
+  | x /= y && x /= z && y /= z = x <> y <> z
+  | otherwise                  = x <> z
+-- otherwise is: x /= y && y /= z && y == z
+
+-- Original implementation: too strict
+-- appendDiff3 :: (Monoid a, Eq a) => a -> a -> a -> a
+-- appendDiff3 x y z = x <> y' <> z'
+--     where y' = if (y /= x)
+--                   then y
+--                   else mempty
+--           z' = if (z /= x) && (z /= y)
+--                   then z
+--                   else mempty
 
 {-
 
