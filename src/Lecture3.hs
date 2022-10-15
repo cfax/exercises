@@ -186,14 +186,27 @@ monsters, you should get a combined treasure and not just the first
 -}
 instance (Eq a, Semigroup a) => Semigroup (Treasure a) where
     (<>) :: Treasure a -> Treasure a -> Treasure a
-    t1 <> t2
-      | t1 == NoTreasure = t2
-      | t2 == NoTreasure = t1
-      | otherwise        = SomeTreasure (t <> u)
-          where SomeTreasure t = t1
-                SomeTreasure u = t2
+    NoTreasure <> x = x
+    x <> NoTreasure = x
+    SomeTreasure t <> SomeTreasure u = SomeTreasure (t <> u)
 
--- Original implementation
+-- Second implementation, works by "mistake" :)
+--
+-- The where clause is attached to entire guard, not only the latest guard. And
+-- t1 can be NoTreasure hence the warning.
+-- This code works because Haskell is lazy and it doesn't actually perform
+-- pattern-matching until the otherwise case.
+--
+--    t1 <> t2
+--      | t1 == NoTreasure = t2
+--      | t2 == NoTreasure = t1
+--      | otherwise        = SomeTreasure (t <> u)
+--          where SomeTreasure t = t1
+--                SomeTreasure u = t2
+
+-- Original implementation, can be simplified
+--    t1 <> t2 =
+--       case (t1, t2) of
 --          (NoTreasure, SomeTreasure t)     -> SomeTreasure t
 --          (SomeTreasure t, NoTreasure)     -> SomeTreasure t
 --          (SomeTreasure t, SomeTreasure u) -> SomeTreasure (t <> u)
