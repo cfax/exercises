@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE StrictData #-}
 
@@ -152,22 +153,40 @@ split c s = case rest of
                 _:rest -> chunk : split c rest
   where (chunk, rest) = break (==c) s
 
-hasThreeElements :: [a] -> Bool
-hasThreeElements xs = length xs == 3
-
 parseRow :: String -> Maybe Row
-parseRow line = if hasThreeElements listOfValues
-                  then case (product', tradeType', cost') of
-                         (Just p, Just t, Just c) -> Just (Row p t c)
-                         (_, _, _)                -> Nothing
-                  else Nothing
+parseRow line = case listOfValues of
+                  (p : t : c: []) -> let p' = parseProduct p
+                                         t' = readMaybe t :: Maybe TradeType
+                                         c' = parseCost c
+                                     in case (p', t', c') of
+                                           (Just p'', Just t'', Just c'') -> Just (Row p'' t'' c'')
+                                           _                              -> Nothing
+                  _               -> Nothing
      where listOfValues = split ',' line
-           (rProduct : rTradeType : rCost : _) = listOfValues  -- This generates a warning*
-           product' = parseProduct rProduct
-           tradeType' = readMaybe rTradeType :: Maybe TradeType
-           cost' = parseCost rCost
 
--- *incomplete-uni-patterns - which I'm not sure how to fix.
+-- Original omplementation, caused a warning because of "Boolean blindness" antipattern
+--parseRow line = if hasThreeElements listOfValues
+--                  then case (product', tradeType', cost') of
+--                         (Just p, Just t, Just c) -> Just (Row p t c)
+--                         (_, _, _)                -> Nothing
+--                  else Nothing
+--     where listOfValues = split ',' line
+--           (rProduct : rTradeType : rCost : _) = listOfValues  -- This generates a warning*
+--                                                               -- *incomplete-uni-patterns
+--           product' = parseProduct rProduct
+--           tradeType' = readMaybe rTradeType :: Maybe TradeType
+--           cost' = parseCost rCost
+
+-- Dmitrii's solution: MonadFail desugaring
+--parseRow line = do
+--    [rProduct, rTradeType, rCost] <- Just $ split ',' line
+--    guard $ rProduct /= ""  -- this replaces 'parseProduct'
+--    tradeType' <- readMaybe rTradeType
+--    cost' <- readMaybe rCost
+--    guard $ rCost >= 0  -- this replaces parseCost
+--    pure $ Row rProduct tradeType' cost'
+--        where guard :: (String -> Bool) -> String
+--              guard f x = f x
 
 parseProduct :: String -> Maybe String
 parseProduct "" = Nothing
@@ -231,18 +250,23 @@ The 'Stats' data type has multiple fields. All these fields have
 instance for the 'Stats' type itself.
 -}
 
+(<!>) :: Semigroup a => Maybe a -> Maybe a -> Maybe a
+x <!> y = case x <> y of
+    Nothing -> Nothing
+    Just !a -> Just a  -- the !a pattern is the important part here
+
 instance Semigroup Stats where
     (<>) :: Stats -> Stats -> Stats
     x <> y = Stats
-        (statsTotalPositions x <> statsTotalPositions y)
-        (statsTotalSum x       <> statsTotalSum y)
-        (statsAbsoluteMax x    <> statsAbsoluteMax y)
-        (statsAbsoluteMin x    <> statsAbsoluteMin y)
-        (statsSellMax x        <> statsSellMax y)
-        (statsSellMin x        <> statsSellMin y)
-        (statsBuyMax x         <> statsBuyMax y)
-        (statsBuyMin x         <> statsBuyMin y)
-        (statsLongest x        <> statsLongest y)
+        (statsTotalPositions x <>  statsTotalPositions y)
+        (statsTotalSum x       <>  statsTotalSum y)
+        (statsAbsoluteMax x    <>  statsAbsoluteMax y)
+        (statsAbsoluteMin x    <>  statsAbsoluteMin y)
+        (statsSellMax x        <!> statsSellMax y)
+        (statsSellMin x        <!> statsSellMin y)
+        (statsBuyMax x         <!> statsBuyMax y)
+        (statsBuyMin x         <!> statsBuyMin y)
+        (statsLongest x        <>  statsLongest y)
 
 
 {-
@@ -338,9 +362,9 @@ displayStats s =
       ,"Longest product name   : " ++ (unMaxLen $ statsLongest s)
       ]
 
-showMaybeValue :: Show a => (t a -> a) -> Maybe (t a) -> String
-showMaybeValue f s = case (fmap f s) of
-                        Just n -> show n
+showMaybeValue :: Show a => (x -> a) -> Maybe x -> String
+showMaybeValue f s = case s of
+                        Just n -> show (f n)
                         Nothing -> "no value"
 
 {-
